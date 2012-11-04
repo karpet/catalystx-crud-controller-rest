@@ -19,7 +19,7 @@ sub default : Path {
     $c->response->status(404);
 }
 
-my @temp_files;
+my @temp_files = ();
 
 sub push_temp_files {
     shift;

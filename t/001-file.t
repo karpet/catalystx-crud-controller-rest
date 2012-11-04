@@ -9,22 +9,26 @@ use_ok('CatalystX::CRUD::Object::File');
 use Catalyst::Test 'MyApp';
 use Data::Dump qw( dump );
 use HTTP::Request::Common;
+use JSON;
 
-###########################################
+####################################################
 # do CRUD stuff
 
 my $res;
 
 # create
 ok( $res = request(
-        POST( '/rest/file/testfile', [ content => 'hello world' ] )
+        PUT('/rest/file/testfile',
+            Content => encode_json( { content => 'hello world' } )
+        )
     ),
-    "POST new file"
+    "PUT new file"
 );
-
-is( $res->content,
-    '{ content => "hello world", file => "testfile" }',
-    "POST new file response"
+is( $res->code, 201, "PUT returns 201" );
+is_deeply(
+    decode_json( $res->content ),
+    { content => "hello world", file => "testfile" },
+    "PUT new file response"
 );
 
 ####################################################
@@ -109,44 +113,6 @@ ok( $res = request(
 );
 is( $res->code, 204, "related == three" );
 
-# turn rpc enable on and run again
-MyApp->controller('REST::File')->enable_rpc_compat(1);
-
-ok( $res = request('/rest/file/create'), "/rest/file/create" );
-is( $res->code, 302, "/rest/file/create" );
-ok( $res = request('/rest/file'), "zero with rpc" );
-is( $res->code, 200, "zero with rpc => list()" );
-ok( $res = request('/rest/file/testfile'), "one with rpc" );
-is( $res->code, 200, "oid == one with rpc" );
-ok( $res = request('/rest/file/testfile/view'), "view with rpc" );
-is( $res->code, 200, "rpc == two with rpc" );
-ok( $res = request(
-        POST( '/rest/file/testfile/dir/otherdir%2ftestfile2/add', [] )
-    ),
-    "three with rpc"
-);
-is( $res->code, 204, "related == three with rpc" );
-ok( $res = request(
-        POST( '/rest/file/testfile/dir/otherdir%2ftestfile2/rpc', [] )
-    ),
-    "four"
-);
-is( $res->code, 404, "404 == related rpc with enable_rpc_compat" );
-
-ok( $res = request('/rest/file/testfile/two/three/four/five'),
-    "five with rpc" );
-is( $res->code, 404, "404 == five with rpc" );
-
-ok( $res = request(
-        POST(
-            '/rest/file/testfile/dir/otherdir%2ftestfile2/remove',
-            [ 'x-tunneled-method' => 'DELETE' ]
-        )
-    ),
-    "three with rpc"
-);
-is( $res->code, 204, "related == three with rpc" );
-
 # delete the file
 
 ok( $res = request(
@@ -183,5 +149,5 @@ like( $res->content, qr/content => undef/, "file nuked" );
 ok( $res = request('/rest/file'), "/ request with no items" );
 
 #dump $res;
-is( $res->code, 200, "/ request with no items == 200" );
-is( $res->content, "", "no content for no results" );
+is( $res->code,    200, "/ request with no items == 200" );
+is( $res->content, "",  "no content for no results" );

@@ -10,7 +10,7 @@ perl_version '5.008003';
 all_from 'lib/CatalystX/CRUD/Controller/REST.pm';
 
 requires 'Test::More'                            => 0;
-requires 'CatalystX::CRUD'                       => 0.53;
+requires 'CatalystX::CRUD'                       => 0.54;
 requires 'Catalyst::Action::REST'                => 0;
 requires 'Scalar::Util'                          => 0;
 requires 'JSON::XS'                              => 2.23;
