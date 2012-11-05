@@ -52,11 +52,11 @@ CatalystX::CRUD::Controller::REST - Catalyst::Controller::REST with CRUD
  # DELETE    /foo/<pk>           -> delete record
  # GET       /foo/<pk>           -> view record
  # GET       /foo/<pk>/bar       -> view 'bar' object(s) related to 'foo'
+ # POST      /foo/<pk>/bar       -> create 'bar' object related to 'foo'
  # GET       /foo/<pk>/bar/<pk2> -> view 'bar' with id <pk2> related to 'foo' with <pk>
- # POST      /foo/<pk>/bar       -> create 'bar' object related to 'foo' (idempotent)
- # PUT       /foo/<pk>/bar/<pk2> -> create relationship between 'foo' and 'bar'
+ # POST      /foo/<pk>/bar/<pk2> -> create relationship between 'foo' and 'bar'
  # DELETE    /foo/<pk>/bar/<pk2> -> sever 'bar' object relationship to 'foo'
- # PUT       /foo/<pk>/bar/<pk2> -> create/update 'bar' object related to 'foo'
+ # PUT       /foo/<pk>/bar/<pk2> -> create/update 'bar' object related to 'foo' (idempotent)
 
 =head1 DESCRIPTION
 
@@ -110,7 +110,7 @@ sub search_objects_GET {
 
 =head2 count_objects
 
-Registers URl space for B<count>.
+Registers URL space for B<count>.
 
 =cut
 
@@ -379,12 +379,21 @@ sub three_args_GET {
     return if $c->stash->{fetch_failed};
     my $result = $self->do_model( $c, 'find_related', $c->stash->{object},
         $rel, $rel_id, );
-    if ( !$result ) {
+    if ( !$result or ( ref $result eq 'ARRAY' and !@$result ) ) {
         my $err_msg = sprintf( "No such %s with id '%s'", $rel, $rel_id );
         $self->status_not_found( $c, message => $err_msg );
     }
     else {
-        $self->status_ok( $c, entity => $result->serialize );
+        # coerce $result into an array ref for consistency
+        if ( ref $result ne 'ARRAY' ) {
+            $result = [$result];
+        }
+
+        my @entity;
+        for my $r (@$result) {
+            push @entity, $r->serialize;
+        }
+        $self->status_ok( $c, entity => \@entity );
     }
 }
 
@@ -431,7 +440,7 @@ sub three_args_POST {
     else {
         # TODO msg
         $self->status_bad_request( $c,
-            message => 'Failed to remove relationship' );
+            message => 'Failed to create relationship' );
     }
 }
 
@@ -706,7 +715,7 @@ sub do_search {
         $pager = $self->do_model( $c, 'make_pager', $count, $results );
     }
 
-    $c->stash->{results}
+    my $r
         = $self->naked_results
         ? $results
         : CatalystX::CRUD::Results->new(
@@ -716,6 +725,7 @@ sub do_search {
             query   => $query,
         }
         );
+    $c->stash( results => $r );
 
 }
 
