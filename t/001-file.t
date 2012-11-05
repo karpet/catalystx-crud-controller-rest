@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-use Test::More tests => 54;
+use Test::More tests => 43;
 use strict;
 use lib qw( lib t/lib );
 use_ok('CatalystX::CRUD::Model::File');
@@ -12,11 +12,15 @@ use HTTP::Request::Common;
 use JSON;
 
 ####################################################
-# do CRUD stuff
+# basic CRUD
 
 my $res;
 
-# create
+# confirm testfile is not there
+ok( $res = request( GET('/rest/file/testfile') ), "GET testfile" );
+is( $res->code, 404, "no testfile at start" );
+
+# create testfile
 ok( $res = request(
         PUT('/rest/file/testfile',
             Content => encode_json( { content => 'hello world' } )
@@ -31,42 +35,50 @@ is_deeply(
     "PUT new file response"
 );
 
-####################################################
 # read the file we just created
 ok( $res = request( HTTP::Request->new( GET => '/rest/file/testfile' ) ),
     "GET new file" );
 
 #diag( $res->content );
 
-like( $res->content, qr/content => "hello world"/, "read file" );
+is_deeply(
+    decode_json( $res->content ),
+    { content => "hello world", file => "testfile" },
+    "GET file response"
+);
 
-####################################################
 # update the file
 ok( $res = request(
-        POST( '/rest/file/testfile', [ content => 'foo bar baz' ] )
+        PUT('/rest/file/testfile',
+            Content => encode_json( { content => 'foo bar baz' } )
+        )
     ),
     "update file"
 );
 
-like( $res->content, qr/content => "foo bar baz"/, "update file" );
+is_deeply(
+    decode_json( $res->content ),
+    { content => "foo bar baz", file => "testfile" },
+    "PUT file update response"
+);
 
 ####################################################
-# create related file
+# create another new file
 ok( $res = request(
-        POST(
-            '/rest/file/otherdir%2ftestfile2',
-            [ content => 'hello world 2' ]
+        PUT('/rest/file/otherdir%2ftestfile2',
+            Content => encode_json( { content => 'hello world 2' } )
         )
     ),
-    "POST new file2"
+    "PUT new file2"
 );
 
-is( $res->content,
-    '{ content => "hello world 2", file => "otherdir/testfile2" }',
-    "POST new file2 response"
+is_deeply(
+    decode_json( $res->content ),
+    { content => "hello world 2", file => "otherdir/testfile2" },
+    "PUT new file2 response"
 );
 
-is( $res->code, 302, "new file 302 redirect status" );
+is( $res->code, 201, "new file 201 status" );
 
 ###################################################
 # test with no args
@@ -75,34 +87,80 @@ is( $res->code, 302, "new file 302 redirect status" );
 
 ok( $res = request('/rest/file'), "/ request with multiple items" );
 is( $res->code, 200, "/ request with multiple items lists" );
-ok( $res->content =~ qr/foo bar baz/ && $res->content =~ qr/hello world/,
-    "content has 2 files" );
+
+#diag( dump( decode_json( $res->content ) ) );
+is_deeply(
+    decode_json( $res->content ),
+    {   count   => 2,
+        query   => 1,
+        results => [
+            { content => "foo bar baz",   file => "./testfile" },
+            { content => "hello world 2", file => "otherdir/testfile2" },
+        ],
+    },
+    "content has 2 files"
+);
 
 ###################################################
-# test the Arg matching with no rpc
+# test dispatching
 
-ok( $res = request('/rest/file/create'), "/rest/file/create" );
-is( $res->code, 302, "/rest/file/create" );
 ok( $res = request('/rest/file'), "zero" );
 is( $res->code, 200, "zero => list()" );
 ok( $res = request('/rest/file/testfile'), "one" );
 is( $res->code, 200, "oid == one" );
 ok( $res = request('/rest/file/testfile/view'), "view" );
 is( $res->code, 404, "rpc == two" );
-ok( $res
-        = request(
-        POST( '/rest/file/testfile/dir/otherdir%2ftestfile2', [] ) ),
-    "three"
-);
+
+######################################################
+# relate 2 files together
+
+# create relationship between testfile and testfile2
+ok( $res = request( PUT('/rest/file/testfile/dir/otherdir%2ftestfile2') ),
+    "three" );
 is( $res->code, 204, "related == three" );
-ok( $res = request(
-        POST( '/rest/file/testfile/dir/otherdir%2ftestfile2/rpc', [] )
-    ),
-    "four"
-);
-is( $res->code, 404, "404 == related rpc with no enable_rpc_compat" );
+
+# more test routing
+ok( $res = request( PUT('/rest/file/testfile/dir/otherdir%2ftestfile2/rpc') ),
+    "four" );
+is( $res->code, 404, "404 4 is too many args" );
 ok( $res = request('/rest/file/testfile/two/three/four/five'), "five" );
-is( $res->code, 404, "404 == five" );
+is( $res->code, 404, "404 5 is too many args" );
+
+########################################################
+# non-CRUD actions: search and count
+ok( $res = request( GET('/rest/file/search?file=testfile') ),
+    "/search?file=testfile" );
+
+#diag( dump decode_json( $res->content ) );
+is_deeply(
+    decode_json( $res->content ),
+    {   count   => 3,
+        query   => 1,
+        results => [
+            { content => "foo bar baz",   file => "./testfile" },
+            { content => "foo bar baz",   file => "./testfile2" },
+            { content => "hello world 2", file => "otherdir/testfile2" },
+        ],
+    },
+    "search gets 3 results"
+);
+
+ok( $res = request( GET('/rest/file/count') ), "GET /count" );
+
+#diag( dump decode_json( $res->content ) );
+is_deeply(
+    decode_json( $res->content ),
+    {   count   => 3,
+        query   => 1,
+        results => [],
+    },
+    "count gets 3 results"
+);
+
+########################################################
+# test "browser-like" behavior tunneling through POST
+
+# delete relationship between testfile and testfile2
 ok( $res = request(
         POST(
             '/rest/file/testfile/dir/otherdir%2ftestfile2',
@@ -111,43 +169,40 @@ ok( $res = request(
     ),
     "three"
 );
-is( $res->code, 204, "related == three" );
+is( $res->code, 204, "tunneled DELETE related == three" );
 
-# delete the file
-
+# delete testfile
 ok( $res = request(
-        POST( '/rest/file/testfile', [ _http_method => 'DELETE' ] )
+        POST( '/rest/file/testfile', [ 'x-tunneled-method' => 'DELETE' ] )
     ),
     "rm file"
 );
 
 ok( $res = request(
-        POST( '/rest/file/testfile2/delete', [ _http_method => 'DELETE' ] )
-    ),
-    "rm file2"
-);
-
-ok( $res = request(
         POST(
-            '/rest/file/otherdir%2ftestfile2/delete',
-            [ _http_method => 'DELETE' ]
+            '/rest/file/otherdir%2ftestfile2',
+            [ 'x-tunneled-method' => 'DELETE' ]
         )
     ),
     "rm otherdir/testfile2"
 );
+is( $res->code, 204, "tunneled DELETE otherdir/testfile2" );
 
 #diag( $res->content );
 
-# confirm it is gone
-ok( $res = request( HTTP::Request->new( GET => '/rest/file/testfile' ) ),
+# confirm testfile is gone
+ok( $res = request( GET('/rest/file/testfile') ),
     "confirm we nuked the file" );
 
-#diag( $res->content );
-
-like( $res->content, qr/content => undef/, "file nuked" );
+#diag( dump $res->content );
+is( $res->code, 404, "testfile is gone" );
 
 ok( $res = request('/rest/file'), "/ request with no items" );
+is( $res->code, 200, "/ request with no items == 200" );
 
-#dump $res;
-is( $res->code,    200, "/ request with no items == 200" );
-is( $res->content, "",  "no content for no results" );
+#diag( dump decode_json( $res->content ) );
+is_deeply(
+    decode_json( $res->content ),
+    { count => 0, query => 1, results => [], },
+    "no content for no results"
+);

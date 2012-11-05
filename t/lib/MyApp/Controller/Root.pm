@@ -28,6 +28,9 @@ sub push_temp_files {
 
 END {
     for my $f (@temp_files) {
+        if ( defined -s $f ) {
+            warn "exists > $f\n";
+        }
         warn "unlinking $f\n" if $ENV{CATALYST_DEBUG};
         $f->remove;
     }

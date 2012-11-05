@@ -23,6 +23,8 @@ __PACKAGE__->mk_accessors(
 
 with 'CatalystX::CRUD::ControllerRole';
 
+use CatalystX::CRUD::Results;
+
 =head1 NAME
 
 CatalystX::CRUD::Controller::REST - Catalyst::Controller::REST with CRUD
@@ -54,7 +56,7 @@ CatalystX::CRUD::Controller::REST - Catalyst::Controller::REST with CRUD
  # POST      /foo/<pk>/bar       -> create 'bar' object related to 'foo' (idempotent)
  # PUT       /foo/<pk>/bar/<pk2> -> create relationship between 'foo' and 'bar'
  # DELETE    /foo/<pk>/bar/<pk2> -> sever 'bar' object relationship to 'foo'
- # POST      /foo/<pk>/bar/<pk2> -> update 'bar' object related to 'foo'
+ # PUT       /foo/<pk>/bar/<pk2> -> create/update 'bar' object related to 'foo'
 
 =head1 DESCRIPTION
 
@@ -80,12 +82,23 @@ This is B<not> a subclass of CatalystX::CRUD::Controller.
 ##############################################################
 # Local actions
 
+=head2 search_objects
+
+Registers URL space for B<search>.
+
+=cut
+
 sub search_objects : Path('search') : Args(0) : ActionClass('REST') { }
+
+=head2 search_objects_GET
+
+Query the model and return results. See do_search().
+
+=cut
 
 sub search_objects_GET {
     my ( $self, $c ) = @_;
-    $c->log->debug('search_GET');
-    $self->search($c);
+    $self->do_search($c);
     if ( !blessed( $c->stash->{results} ) ) {
         $self->status_bad_request( $c,
             message => 'Must provide search parameters' );
@@ -95,12 +108,26 @@ sub search_objects_GET {
     }
 }
 
+=head2 count_objects
+
+Registers URl space for B<count>.
+
+=cut
+
 sub count_objects : Path('count') : Args(0) : ActionClass('REST') { }
+
+=head2 count_objects_GET
+
+Like search_objects_GET() but does not set result values, only a total count.
+Useful for AJAX-y types of situations where you want to query for a total
+number of matches and create a pager but not actually retrieve any data.
+
+=cut
 
 sub count_objects_GET {
     my ( $self, $c ) = @_;
-    $c->log->debug('count_GET');
-    $self->count($c);
+    $c->stash( fetch_no_results => 1 );    # optimize a little
+    $self->do_search($c);
     if ( !blessed( $c->stash->{results} ) ) {
         $self->status_bad_request( $c,
             message => 'Must provide search parameters' );
@@ -113,17 +140,34 @@ sub count_objects_GET {
 ##############################################################
 # REST actions
 
-# base method for /
+=head2 zero_args
+
+Registers URL space for 0 path arguments.
+
+=cut
+
 sub zero_args : Path('') : Args(0) : ActionClass('REST') { }
 
-# list objects
+=head2 zero_args_GET( I<ctx> )
+
+GET /foo -> list objects of type foo.
+
+Calls do_search().
+
+=cut
+
 sub zero_args_GET {
     my ( $self, $c ) = @_;
-    $self->list($c);
+    $self->do_search($c);
     $self->status_ok( $c, entity => $c->stash->{results}->serialize );
 }
 
-# create object
+=head2 zero_args_POST( I<ctx> )
+
+POST /foo -> create object of type foo.
+
+=cut
+
 sub zero_args_POST {
     my ( $self, $c ) = @_;
 
@@ -147,27 +191,41 @@ sub zero_args_POST {
     }
 }
 
-# base method for /<pk>
-sub one_arg : Path('') : Args(1) : ActionClass('REST') {
+=head2 one_arg
+
+Registers URL space for 1 path argument.
+
+=cut
+
+sub one_arg : Path('') : Args(1) : ActionClass('REST::ForBrowsers') {
     my ( $self, $c, $id ) = @_;
     $self->fetch( $c, $id );
 }
 
+=head2 one_arg_GET( I<ctx>, I<pk> )
+
+GET /foo/<pk> -> retrieve object for I<pk>.
+
+=cut
+
 sub one_arg_GET {
     my ( $self, $c, $id ) = @_;
-
-    # rely on one_arg() to handle errors to this point.
-    if ( $self->has_errors($c) ) {
-        $c->clear_errors;
-        return if $c->response->status;
-    }
-
+    return if $c->stash->{fetch_failed};
+    return if $c->stash->{object}->is_new;    # 404
     $self->status_ok( $c, entity => $c->stash->{object}->serialize );
 }
 
-# create or update object (idempotent)
+=head2 one_arg_PUT( I<ctx>, I<pk> )
+
+PUT /foo/<pk> -> create or update the object for I<pk>.
+
+This method must be idempotent. POST is not.
+
+=cut
+
 sub one_arg_PUT {
     my ( $self, $c, $id ) = @_;
+    return if $c->stash->{fetch_failed};
 
     # remember if we're creating or updating
     my $obj_is_new = $c->stash->{object}->is_new;
@@ -197,15 +255,15 @@ sub one_arg_PUT {
     }
 }
 
-# delete object
+=head2 one_arg_DELETE( I<ctx>, I<pk> )
+
+DELETE /foo/<pk> -> delete the object for I<pk>.
+
+=cut
+
 sub one_arg_DELETE {
     my ( $self, $c, $id ) = @_;
-
-    # rely on one_arg() to handle errors to this point.
-    if ( $self->has_errors($c) ) {
-        $c->clear_errors;
-        return if $c->response->status;
-    }
+    return if $c->stash->{fetch_failed};
 
     unless ( $self->can_write($c) ) {
         $self->status_forbidden( $c, message => 'Permission denied' );
@@ -221,43 +279,63 @@ sub one_arg_DELETE {
     }
 }
 
-# related to /<pk>
-sub two_args : Path('') : Args(2) : ActionClass('REST') {
+=head2 two_args
+
+Registers URL space for 2 path arguments.
+
+=cut
+
+sub two_args : Path('') : Args(2) : ActionClass('REST::ForBrowsers') {
     my ( $self, $c, $id, $rel ) = @_;
-    $self->fetch( $c, $id );
     $c->stash( rel_name => $rel );
+    $self->fetch( $c, $id );
 }
 
-# list /<pk>/<rel>
+=head2 two_args_GET( I<ctx>, I<pk>, I<rel> )
+
+GET /foo/<pk>/bar -> a list of objects of type bar related to foo.
+
+=cut
+
 sub two_args_GET {
     my ( $self, $c, $id, $rel ) = @_;
-
-    # rely on two_args() to handle errors to this point.
-    if ( $self->has_errors($c) ) {
-        $c->clear_errors;
-        return if $c->response->status;
-    }
-
+    return if $c->stash->{fetch_failed};
     my $results
         = $self->do_model( $c, 'iterator_related', $c->stash->{object},
         $rel, );
-    $self->status_ok( $c, entity => $results->serialize );
+    if ( $self->has_errors($c) ) {
+        my $err = $c->error->[0];
+        if ( $err =~ m/^(unsupported relationship name: (\S+))/i ) {
+            $self->status_not_found( $c, message => $1 );
+        }
+        else {
+            $self->status_bad_request( $c, message => $err );
+        }
+        $c->clear_errors;
+    }
+    else {
+        $self->status_ok( $c, entity => $results->serialize );
+    }
 }
 
-# create /<pk>/<rel>
+=head2 two_args_POST( I<ctx>, I<pk>, I<rel> )
+
+POST /foo/<pk>/bar  -> create relationship between foo and bar.
+
+B<TODO> This method calls a not-yet-implemented create_related()
+action in the CXC::Model.
+
+=cut
+
 sub two_args_POST {
     my ( $self, $c, $id, $rel ) = @_;
-
-    # rely on two_args() to handle errors to this point.
-    if ( $self->has_errors($c) ) {
-        $c->clear_errors;
-        return if $c->response->status;
-    }
-
+    return if $c->stash->{fetch_failed};
     unless ( $self->can_write($c) ) {
         $self->status_forbidden( $c, message => 'Permission denied' );
         return;
     }
+
+    $self->throw_error('TODO');
 
     my $rel_obj
         = $self->do_model( $c, 'create_related', $c->stash->{object}, $rel, );
@@ -277,24 +355,28 @@ sub two_args_POST {
 
 }
 
-# actions on <rel> related to /<pk>
-sub three_args : Path('') : Args(3) : ActionClass('REST') {
+=head2 three_args
+
+Registers the URL space for 3 path arguments.
+
+=cut
+
+sub three_args : Path('') : Args(3) : ActionClass('REST::ForBrowsers') {
     my ( $self, $c, $id, $rel, $rel_id ) = @_;
-    $self->fetch( $c, $id );
     $c->stash( rel_name         => $rel );
     $c->stash( foreign_pk_value => $rel_id );
+    $self->fetch( $c, $id );
 }
 
-# /<pk>/<re>/<pk2>
+=head2 three_args_GET( I<ctx>, I<pk>, I<rel>, I<rel_id> )
+
+GET /foo/<pk>/<re>/<pk2>
+
+=cut
+
 sub three_args_GET {
     my ( $self, $c, $id, $rel, $rel_id ) = @_;
-
-    # rely on three_args() to handle errors to this point.
-    if ( $self->has_errors($c) ) {
-        $c->clear_errors;
-        return if $c->response->status;
-    }
-
+    return if $c->stash->{fetch_failed};
     my $result = $self->do_model( $c, 'find_related', $c->stash->{object},
         $rel, $rel_id, );
     if ( !$result ) {
@@ -306,27 +388,22 @@ sub three_args_GET {
     }
 }
 
-# DELETE    /foo/<pk>/bar/<pk2> -> sever 'bar' object relationship to 'foo'
+=head2 three_args_DELETE( I<ctx>, I<pk>, I<rel>, I<rel_pk> )
+
+DELETE /foo/<pk>/bar/<pk2> -> sever 'bar' object relationship to 'foo'
+
+=cut
 
 sub three_args_DELETE {
     my ( $self, $c, $id, $rel, $rel_id ) = @_;
-
-    # rely on three_args() to handle errors to this point.
-    if ( $self->has_errors($c) ) {
-        $c->clear_errors;
-        return if $c->response->status;
-    }
-
+    return if $c->stash->{fetch_failed};
     unless ( $self->can_write($c) ) {
         $self->status_forbidden( $c, message => 'Permission denied' );
         return;
     }
 
-    my $rt = $self->do_model(
-        $c, 'rm_related', $c->stash->{object},
-        $c->stash->{rel_name},
-        $c->stash->{foreign_pk_value}
-    );
+    my $rt = $self->do_model( $c, 'rm_related', $c->stash->{object},
+        $rel, $rel_id, );
     if ($rt) {
         $self->status_no_content($c);
     }
@@ -337,16 +414,65 @@ sub three_args_DELETE {
     }
 }
 
-# TODO
-# POST      /foo/<pk>/bar/<pk2> -> create relationship between 'foo' and 'bar'
-# PUT       /foo/<pk>/bar/<pk2> -> update 'bar' object related to 'foo'
+=head2 three_args_POST( I<ctx>, I<pk>, I<rel>, I<rel_pk> )
+
+POST /foo/<pk>/bar/<pk2> -> create relationship between 'foo' and 'bar'
+
+=cut
+
+sub three_args_POST {
+    my ( $self, $c, $id, $rel, $rel_id ) = @_;
+    return if $c->stash->{fetch_failed};
+    my $rt = $self->do_model( $c, 'add_related', $c->stash->{object},
+        $rel, $rel_id, );
+    if ($rt) {
+        $self->status_no_content($c);
+    }
+    else {
+        # TODO msg
+        $self->status_bad_request( $c,
+            message => 'Failed to remove relationship' );
+    }
+}
+
+=head2 three_args_PUT( I<ctx>, I<pk>, I<rel>, I<rel_pk> )
+
+PUT /foo/<pk>/bar/<pk2> -> create/update 'bar' object related to 'foo'
+
+=cut
+
+sub three_args_PUT {
+    my ( $self, $c, $id, $rel, $rel_id ) = @_;
+    return if $c->stash->{fetch_failed};
+    my $rt = $self->do_model( $c, 'put_related', $c->stash->{object},
+        $rel, $rel_id, );
+
+    if ($rt) {
+        $self->status_no_content($c);
+    }
+    else {
+        # TODO msg
+        $self->status_bad_request( $c,
+            message => 'Failed to PUT relationship' );
+    }
+}
 
 ##########################################################
 # CRUD methods
 
-# override base method
+=head2 save_object( I<ctx> )
+
+Calls can_write(), inflate_object(), precommit(), create_or_update_object()
+and postcommit().
+
+=cut
+
 sub save_object {
     my ( $self, $c ) = @_;
+    unless ( $self->can_write($c) ) {
+        $self->status_forbidden( $c, message => 'Permission denied' );
+        return;
+    }
 
     # get a valid object
     my $obj = $self->inflate_object($c);
@@ -357,7 +483,6 @@ sub save_object {
 
     # write our changes
     unless ( $self->precommit( $c, $obj ) ) {
-        $c->stash->{template} ||= $self->default_template;
         return 0;
     }
     $self->create_or_update_object( $c, $obj );
@@ -384,6 +509,13 @@ sub create_or_update_object {
         $obj->$method;
     }
 }
+
+=head2 delete_object( I<ctx> )
+
+Checks can_write(), precommit(), and if both true,
+calls the delete() method on the B<object> in the stash().
+
+=cut
 
 sub delete_object {
     my ( $self, $c ) = @_;
@@ -435,20 +567,57 @@ sub inflate_object {
     return $object;
 }
 
-sub can_read  {1}
+=head2 can_read( I<context> )
+
+Returns true if the current request is authorized to read() the C<object> in
+stash().
+
+Default is true.
+
+=cut
+
+sub can_read {1}
+
+=head2 can_write( I<context> )
+
+Returns true if the current request is authorized to create() or update()
+the C<object> in stash().
+
+=cut
+
 sub can_write {1}
+
+=head2 precommit( I<context>, I<object> )
+
+Called by save_object(). If precommit() returns a false value, save_object() is aborted.
+If precommit() returns a true value, create_or_update_object() gets called.
+
+The default return is true.
+
+=cut
 
 sub precommit {1}
 
 =head2 postcommit( I<cxt>, I<obj> )
 
-Called internally inside save_object(). Overrides parent class
-which issues redirect on successful save_object(). Our default just returns true.
+Called internally inside save_object(). Our default just returns true.
 Override this method to post-process a successful save_object() action.
 
 =cut
 
 sub postcommit {1}
+
+=head2 fetch( I<ctx>, I<pk> )
+
+Determines the correct value and field name for I<pk>
+and calls the do_model() method for C<fetch>.
+
+On success, the B<object> key will be set in stash().
+
+On failure, calls status_not_found() and sets the
+B<fetch_failed> stash() key.
+
+=cut
 
 sub fetch {
     my ( $self, $c, $id ) = @_;
@@ -486,7 +655,10 @@ sub fetch {
             = sprintf( "No such %s with id '%s'", $self->model_name, $id );
         $self->status_not_found( $c, message => $err_msg );
         $c->log->error($err_msg);
+        $c->stash( fetch_failed => 1 );
+        return 0;
     }
+    return $c->stash->{object};
 }
 
 =head2 do_search( I<context>, I<arg> )
@@ -507,20 +679,10 @@ CatalystX::CRUD::Results object.
 sub do_search {
     my ( $self, $c, @arg ) = @_;
 
-    $self->throw_error("TODO");
-
-    # stash the form so it can be re-displayed
-    # subclasses must stick-ify it in their own way.
-    $c->stash->{form} ||= $self->form($c);
-
     # if we have no input, just return for initial search
     if ( !@arg && !$c->req->param && $c->action->name eq 'search' ) {
         return;
     }
-
-    # turn flag on unless explicitly turned off
-    $c->stash->{view_on_single_result} = 1
-        unless exists $c->stash->{view_on_single_result};
 
     my $query;
     if ( $self->can('make_query') ) {
@@ -539,35 +701,42 @@ sub do_search {
         $results = $self->do_model( $c, 'search', $query );
     }
 
-    if (   $results
-        && $count == 1
-        && $c->stash->{view_on_single_result}
-        && ( my $uri = $self->uri_for_view_on_single_result( $c, $results ) )
-        )
-    {
-        $c->log->debug("redirect for single_result") if $c->debug;
-        $c->response->redirect($uri);
+    my $pager;
+    if ( $count && $self->model_can( $c, 'make_pager' ) ) {
+        $pager = $self->do_model( $c, 'make_pager', $count, $results );
     }
-    else {
 
-        my $pager;
-        if ( $count && $self->model_can( $c, 'make_pager' ) ) {
-            $pager = $self->do_model( $c, 'make_pager', $count, $results );
+    $c->stash->{results}
+        = $self->naked_results
+        ? $results
+        : CatalystX::CRUD::Results->new(
+        {   count   => $count,
+            pager   => $pager,
+            results => $results,
+            query   => $query,
         }
-
-        $c->stash->{results}
-            = $self->naked_results
-            ? $results
-            : CatalystX::CRUD::Results->new(
-            {   count   => $count,
-                pager   => $pager,
-                results => $results,
-                query   => $query,
-            }
-            );
-    }
+        );
 
 }
+
+=head2 do_model( I<ctx>, I<args> )
+
+Wrapper around the ControllerRole method of the same name.
+The wrapper does an eval and sets the I<ctx> error param
+with $@.
+
+=cut
+
+around 'do_model' => sub {
+    my ( $orig, $self, $c, @args ) = @_;
+    my $results;
+    eval { $results = $self->$orig( $c, @args ); };
+    if ($@) {
+        $c->error($@);    # re-throw
+        return $results;
+    }
+    return $results;
+};
 
 1;
 
