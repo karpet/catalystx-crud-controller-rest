@@ -46,17 +46,19 @@ CatalystX::CRUD::Controller::REST - Catalyst::Controller::REST with CRUD
  1;
     
  # now you can manage Foo objects with URIs like:
- # POST      /foo                -> create new record
- # GET       /foo                -> list all records
- # PUT       /foo/<pk>           -> create or update record (idempotent)
- # DELETE    /foo/<pk>           -> delete record
- # GET       /foo/<pk>           -> view record
- # GET       /foo/<pk>/bar       -> view 'bar' object(s) related to 'foo'
- # POST      /foo/<pk>/bar       -> create 'bar' object related to 'foo'
- # GET       /foo/<pk>/bar/<pk2> -> view 'bar' with id <pk2> related to 'foo' with <pk>
- # POST      /foo/<pk>/bar/<pk2> -> create relationship between 'foo' and 'bar'
- # DELETE    /foo/<pk>/bar/<pk2> -> sever 'bar' object relationship to 'foo'
- # PUT       /foo/<pk>/bar/<pk2> -> create/update 'bar' object related to 'foo' (idempotent)
+ # POST      /foo                -> create new Foo record
+ # GET       /foo                -> list all Foo records
+ # PUT       /foo/<pk>           -> create or update Foo record (idempotent)
+ # DELETE    /foo/<pk>           -> delete Foo record
+ # GET       /foo/<pk>           -> view Foo record 
+ # GET       /foo/<pk>/bar       -> view Bar object(s) related to Foo
+ # POST      /foo/<pk>/bar       -> create Bar object related to Foo
+ # GET       /foo/<pk>/bar/<pk2> -> view Bar with id <pk2> related to Foo with <pk>
+ # POST      /foo/<pk>/bar/<pk2> -> create relationship between Foo <pk> and Bar <pk2>
+ # DELETE    /foo/<pk>/bar/<pk2> -> sever Bar object relationship to Foo
+ # PUT       /foo/<pk>/bar/<pk2> -> create/update Bar object related to Foo (idempotent)
+ # GET       /foo/search         -> search for Foo objects
+ # GET       /foo/count          -> search for Foo objects, returning count only
 
 =head1 DESCRIPTION
 
@@ -603,6 +605,8 @@ sub can_read {1}
 
 Returns true if the current request is authorized to create() or update()
 the C<object> in stash().
+
+Default is true.
 
 =cut
 
