@@ -513,7 +513,7 @@ sub save_object {
     return $obj;
 }
 
-=head2 create_or_update_object( I<context>, I<object> )
+=head2 create_or_update_object( I<ctx>, I<object> )
 
 Calls the update() or create() method on the I<object> (or model_adapter()),
 picking the method based on whether C<object_id> in stash() 
@@ -590,7 +590,7 @@ sub inflate_object {
     return $object;
 }
 
-=head2 can_read( I<context> )
+=head2 can_read( I<ctx> )
 
 Returns true if the current request is authorized to read() the C<object> in
 stash().
@@ -601,7 +601,7 @@ Default is true.
 
 sub can_read {1}
 
-=head2 can_write( I<context> )
+=head2 can_write( I<ctx> )
 
 Returns true if the current request is authorized to create() or update()
 the C<object> in stash().
@@ -612,7 +612,7 @@ Default is true.
 
 sub can_write {1}
 
-=head2 precommit( I<context>, I<object> )
+=head2 precommit( I<ctx>, I<object> )
 
 Called by save_object(). If precommit() returns a false value, save_object() is aborted.
 If precommit() returns a true value, create_or_update_object() gets called.
@@ -690,7 +690,7 @@ sub fetch {
     return $c->stash->{object};
 }
 
-=head2 do_search( I<context>, I<arg> )
+=head2 do_search( I<ctx>, I<arg> )
 
 Prepare and execute a search. Called internally by list()
 and search().
