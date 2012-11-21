@@ -12,6 +12,7 @@ all_from 'lib/CatalystX/CRUD/Controller/REST.pm';
 requires 'Test::More'                            => 0;
 requires 'CatalystX::CRUD'                       => 0.54;
 requires 'Catalyst::Action::REST'                => 0;
+requires 'Catalyst::Plugin::Static::Simple'      => 0;
 requires 'Scalar::Util'                          => 0;
 requires 'JSON::XS'                              => 2.23;
 
