@@ -8,7 +8,7 @@ BEGIN {
     extends qw( Catalyst::Controller::REST CatalystX::CRUD );
 }
 
-our $VERSION = '0.002';
+our $VERSION = '0.003';
 
 __PACKAGE__->mk_accessors(
     qw(

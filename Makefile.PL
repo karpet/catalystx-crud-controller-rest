@@ -14,7 +14,7 @@ requires 'CatalystX::CRUD'                       => 0.54;
 requires 'Catalyst::Action::REST'                => 0;
 requires 'Catalyst::Plugin::Static::Simple'      => 0;
 requires 'Scalar::Util'                          => 0;
-requires 'JSON::XS'                              => 2.23;
+requires 'JSON'                                  => 2.0;
 
 license 'perl';
 homepage 'http://dev.catalyst.perl.org/repos/Catalyst/CatalystX-CRUD/CatalystX-CRUD-Controller-REST';
