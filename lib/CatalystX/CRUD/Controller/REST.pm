@@ -793,6 +793,10 @@ You can also look for information at:
 
 =over 4
 
+=item * Mailing List
+
+L<https://groups.google.com/forum/#!forum/catalystxcrud>
+
 =item * RT: CPAN's request tracker
 
 L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=CatalystX-CRUD-Controller-REST>
