@@ -1,5 +1,8 @@
 Revision history for CatalystX-CRUD-Controller-REST
 
+0.004 xxx
+ - fix bug calling status_bad_request()
+
 0.003 01 Jan 2013
  - switch dependency from JSON::XS to JSON
 
