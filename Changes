@@ -1,6 +1,6 @@
 Revision history for CatalystX-CRUD-Controller-REST
 
-0.004 xxx
+0.004 11 May 2014
  - fix bug calling status_bad_request()
 
 0.003 01 Jan 2013
