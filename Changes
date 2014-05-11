@@ -1,10 +1,11 @@
 Revision history for CatalystX-CRUD-Controller-REST
 
-0.001   5 Nov 2012
-    First version, released on an unsuspecting world.
+0.003 01 Jan 2013
+ - switch dependency from JSON::XS to JSON
 
-0.002   21 Nov 2012
-    * add missing required plugin for tests
+0.002 21 Nov 2012
+ - add missing required plugin for tests
 
-0.003   01 Jan 2013
-    * switch dependency from JSON::XS to JSON
+0.001 5 Nov 2012
+ - First version, released on an unsuspecting world.
+
