@@ -343,7 +343,13 @@ sub two_args_POST {
         return;
     }
 
-    $self->throw_error('TODO');
+    if ( !$self->model_can( $c, 'create_related' ) ) {
+        $self->status_bad_request( $c,
+            message =>
+                'This server does not yet implement the required method create_related'
+        );
+        return;
+    }
 
     my $rel_obj
         = $self->do_model( $c, 'create_related', $c->stash->{object}, $rel, );
@@ -359,7 +365,7 @@ sub two_args_POST {
     else {
 
         # TODO msg
-        $self->status_bad_request( $c, message => 'Failed to delete' );
+        $self->status_bad_request( $c, message => 'Failed to create' );
     }
 
 }
