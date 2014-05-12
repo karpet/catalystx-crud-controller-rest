@@ -386,9 +386,8 @@ GET /foo/<pk>/<re>/<pk2>
 sub three_args_GET {
     my ( $self, $c, $id, $rel, $rel_id ) = @_;
     return if $c->stash->{fetch_failed};
-    my $result
-        = $self->do_model( $c, 'find_related', $c->stash->{object}, $rel,
-        $rel_id, );
+    my $result = $self->do_model( $c, 'find_related', $c->stash->{object},
+        $rel, $rel_id, );
     if ( !$result or ( ref $result eq 'ARRAY' and !@$result ) ) {
         my $err_msg = sprintf( "No such %s with id '%s'", $rel, $rel_id );
         $self->status_not_found( $c, message => $err_msg );
@@ -422,8 +421,8 @@ sub three_args_DELETE {
         return;
     }
 
-    my $rt = $self->do_model( $c, 'rm_related', $c->stash->{object}, $rel,
-        $rel_id, );
+    my $rt = $self->do_model( $c, 'rm_related', $c->stash->{object},
+        $rel, $rel_id, );
     if ($rt) {
         $self->status_no_content($c);
     }
@@ -444,8 +443,8 @@ POST /foo/<pk>/bar/<pk2> -> create relationship between 'foo' and 'bar'
 sub three_args_POST {
     my ( $self, $c, $id, $rel, $rel_id ) = @_;
     return if $c->stash->{fetch_failed};
-    my $rt = $self->do_model( $c, 'add_related', $c->stash->{object}, $rel,
-        $rel_id, );
+    my $rt = $self->do_model( $c, 'add_related', $c->stash->{object},
+        $rel, $rel_id, );
     if ($rt) {
         $self->status_no_content($c);
     }
@@ -466,8 +465,8 @@ PUT /foo/<pk>/bar/<pk2> -> create/update 'bar' object related to 'foo'
 sub three_args_PUT {
     my ( $self, $c, $id, $rel, $rel_id ) = @_;
     return if $c->stash->{fetch_failed};
-    my $rt = $self->do_model( $c, 'put_related', $c->stash->{object}, $rel,
-        $rel_id, );
+    my $rt = $self->do_model( $c, 'put_related', $c->stash->{object},
+        $rel, $rel_id, );
 
     if ($rt) {
         $self->status_no_content($c);
