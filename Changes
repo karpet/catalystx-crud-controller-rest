@@ -1,5 +1,8 @@
 Revision history for CatalystX-CRUD-Controller-REST
 
+0.005 xxx
+ - two_args_POST now defers to model to indicate support for $model->create_related
+
 0.004 11 May 2014
  - fix bug calling status_bad_request()
 
