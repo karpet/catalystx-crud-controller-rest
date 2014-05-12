@@ -354,7 +354,10 @@ sub two_args_POST {
     my $rel_obj
         = $self->do_model( $c, 'create_related', $c->stash->{object}, $rel, );
     if ($rel_obj) {
-        my $rel_id = $self->make_primary_key_string($rel_obj);
+
+        # this controller doesn't know anything about the PK for $rel,
+        # so assume the object can give us a PK.
+        my $rel_id = $rel_obj->primary_key_uri_escaped;
         $self->status_created(
             $c,
             location =>
