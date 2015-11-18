@@ -14,6 +14,16 @@ use JSON;
 ####################################################
 # basic CRUD
 
+sub json_PUT {
+    my ( $url, $body, $headers ) = @_;
+    my $req = HTTP::Request->new( PUT => $url );
+    $req->headers($headers) if $headers;
+    $req->header( 'Content-Type'   => 'application/json' );
+    $req->header( 'Content-Length' => length($body) );
+    $req->content($body);
+    $req;
+}
+
 my $res;
 
 # confirm testfile is not there
@@ -22,8 +32,8 @@ is( $res->code, 404, "no testfile at start" );
 
 # create testfile
 ok( $res = request(
-        PUT('/rest/file/testfile',
-            Content => encode_json( { content => 'hello world' } )
+        json_PUT(
+            '/rest/file/testfile', encode_json( { content => 'hello world' } )
         )
     ),
     "PUT new file"
@@ -49,8 +59,8 @@ is_deeply(
 
 # update the file
 ok( $res = request(
-        PUT('/rest/file/testfile',
-            Content => encode_json( { content => 'foo bar baz' } )
+        json_PUT(
+            '/rest/file/testfile', encode_json( { content => 'foo bar baz' } )
         )
     ),
     "update file"
@@ -65,8 +75,9 @@ is_deeply(
 ####################################################
 # create another new file
 ok( $res = request(
-        PUT('/rest/file/otherdir%2ftestfile2',
-            Content => encode_json( { content => 'hello world 2' } )
+        json_PUT(
+            '/rest/file/otherdir%2ftestfile2',
+            encode_json( { content => 'hello world 2' } )
         )
     ),
     "PUT new file2"
