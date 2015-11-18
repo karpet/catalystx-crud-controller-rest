@@ -17,8 +17,8 @@ requires 'Scalar::Util'                          => 0;
 requires 'JSON'                                  => 2.0;
 
 license 'perl';
-homepage 'http://dev.catalyst.perl.org/repos/Catalyst/CatalystX-CRUD/CatalystX-CRUD-Controller-REST';
+homepage 'https://github.com/karpet/catalystx-crud-controller-rest';
 bugtracker 'http://rt.cpan.org/NoAuth/Bugs.html?Dist=CatalystX-CRUD-Controller-REST';
-repository 'http://dev.catalyst.perl.org/repos/Catalyst/CatalystX-CRUD/CatalystX-CRUD-Controller-REST';
+repository 'https://github.com/karpet/catalystx-crud-controller-rest.git';
 
 WriteAll;
